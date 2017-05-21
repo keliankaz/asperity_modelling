@@ -405,7 +405,7 @@ function [OUTPUT_STRUCT] = extractoutput(fileName)
 % into matlab structure with fields names corresponding (sometimes with
 % small adjustments to header lines)
 
-% input:
+% input:function 
 % fileName: name of the file in a string without the extension (here
 % assumed to be  .out). IMPORTANT: output file is assumed to have 9 data
 % blocks. Namely 2 boudaryu line blocks, followed by 4 'end bit' blocks and
@@ -558,6 +558,7 @@ function [shearFailureCoord,tensileFailureCoord, ...
 % usage:
 % assessfailure(outputDataStruct)
 
+
 % 2017-04-17: tested and functions properly using the file
 % sample_section_test.out processed with function extractoutput (did not
 % test the physical viability of results)
@@ -567,6 +568,16 @@ c           = inputParameters.material.c;    % cohesion
 phi         = inputParameters.material.phi;   % angle of internal friction
       
 [sigma11, sigma22, sigma12] = gettensor(OUTPUT_DATA_STRUCT,'top');
+[shearFailureCoordTop,    tensileFailureCoordTop]     = find_failure_points(sigma11, sigma22, sigma12,OUTPUT_DATA_STRUCT);
+
+[sigma11, sigma22, sigma12] = gettensor(OUTPUT_DATA_STRUCT,'bottom');
+[shearFailureCoordBottom, tensileFailureCoordBottom]  = find_failure_points(sigma11, sigma22, sigma12,OUTPUT_DATA_STRUCT);
+
+shearFailureCoord   = shearFailureCoordTop  | shearFailureCoordBottom;
+tensileFailureCoord = tensileFailureCoordTop| tensileFailureCoordBottom;
+
+function [shearFailureCoord, tensileFailureCoord] = find_failure_points(SIGMA11, SIGMA22, SIGMA12, OUTPUT_DATA_STRUCT)
+
 numBE           = length(sigma11);
 
 coulombCriterion= zeros(numBE,1);
@@ -604,6 +615,9 @@ shearFailureCoord     = [OUTPUT_DATA_STRUCT.faultInfo.xBeg(find(shearFailureInd)
                                
 tensileFailureCoord   = [OUTPUT_DATA_STRUCT.faultInfo.xBeg(find(tensileFailureInd)+1), ...
                          OUTPUT_DATA_STRUCT.faultInfo.yBeg(find(tensileFailureInd)+1)];
+
+end
+
 
 end
 
@@ -689,7 +703,7 @@ intact_flaw.L           = 10^-5;
 fid=fopen(fileName,'w');
 
 for iFlaw = 1:length(intact_flaw.xcoord)
-
+bottom
 growInputSpecL1 = '*%s %s %s %s %s %s %s \n';
 fprintf(fid,growInputSpecL1, '*tag', 'stiffS', 'stiffN', 'cohes', ...
                              'fric-s', 'fric-d','L');
