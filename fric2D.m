@@ -85,11 +85,17 @@ inputParameters.user.runGROWModel               = 'no' ;     % run grow ('yes' o
                                                              
 % work flow:
 
+%% compile script if need be:
+system('make')
+hold_on_to_your_horses('make*')
+
 %% 1) make input file
 meanSegmentLength = makeinputfile(fileName,X,Y,inputParameters);
 
 %% 2) run program 
 runfric2D(fileName);
+
+hold_on_to_your_horses('fric2d*')
 
 %% 3) extract info
 outputStruct = extractoutput(fileName);
@@ -351,14 +357,14 @@ end
 % 1b) add end bits to input file according to numBuffer segments (figiting
 % needed)
 function [] = make_end_bits(X,Y,numBufferSegments, BVSTop, BVSBot)
-
-    intro =    {'*FRACTURES'; ...
-    '*num	xbeg	ybeg	xend	yend	kode	bvs     bvn     bvs     bvn'; ...
-    '*----	----	----	----	----	----	------	----	-----	--------'; 
-    'fracture  left no  no'};
-
+    
 fileID = fopen('end_bits.txt','w');
-fprintf(fileID,'%s\n',intro{:});
+
+fprintf(fileID,'%s \n','*FRACTURES');
+
+fprintf(fileID,'%s \n','*num	xbeg	ybeg	xend	yend	kode	bvs     bvn     bvs     bvn');
+fprintf(fileID,'%s \n','*----	----	----	----	----	----	------	----	-----	--------');
+fprintf(fileID,'%s', 'fracture  left no  no ');
 
 X1      = X(1);
 Y1      = Y(1);
@@ -379,11 +385,11 @@ bvn     = [0,0];
 BVS     = [BVSTop,BVSBot];
 BVN     = [-100; -100];
 
-ROW1    = [start1,end1,kode(1),bvs(1),bvn(1),BVS(1),BVN(1)];
-ROW2    = [start2,end2,kode(2),bvs(2),bvn(2),BVS(2),BVN(2)];
+ROW1    = [start1(1), start1(2), end1(1), end1(2) , kode(1), bvs(1), bvn(1), BVS(1), BVN(1)];
+ROW2    = [start2(1), start2(2), end2(1), end2(2) , kode(2), bvs(2), bvn(2), BVS(2), BVN(2)];
 
-fprintf(fileID,'%f %f %f %f %f %f %f %f %f %f \n',ROW1);
-fprintf(fileID,  'fracture  right no  no');
+fprintf(fileID,'%f %f %f %f %f %f %f %f %f %f',ROW1);
+fprintf(fileID,'\nfracture  right no  no ');
 fprintf(fileID,'%f %f %f %f %f %f %f %f %f %f \n',ROW2);
 fclose(fileID);
 
@@ -393,9 +399,9 @@ end
 
 %% 2) run fric2D
 function runfric2D(fileName)
-command = ['fric2d_3.2.8 -i ', ...
+command = ['./fric2d_3.2.8 -i ', ...
            fileName,'.in -v -o ', fileName,'.out'];
-system(command);
+system(command, '-echo');
 end
 
 %% 3) extract output into a structure (uses getsection, assign2struct)
@@ -886,8 +892,91 @@ else;                   sigma11 = sigmaT;
                         sigma22 = sigmaN;
 end
 end
-% -------------------------------------------------------------------------
 
+%% check if background process is running
+function varargout = isprocess(pname)
+%ISPROCESS checks if the input process name is running on the system
+%The function returns True/False (0/1) along with the number of instances of the
+%process and the process ID (PID) numbers.
+%
+% Syntax/Usage:  [result] = isprocess('fire*')
+%                [result pid_total] = isprocess('firefox')
+%                [result pid_total pid_nums] = isprocess('firefox')
+%
+% See also endtask
+
+% Distribution Version 2.0
+% Written by Varun Gandhi 13-May-2009
+
+if ispc
+    if (strcmp(pname(end),'*'))
+    pname=pname(1:(end-1));
+    end
+    str=sprintf('tasklist /SVC /NH /FI "IMAGENAME eq %s*"',pname);
+    [sys_status,sys_out] = system(str);
+    if (sys_status == 0)
+        [matches, start_idx, end_idx, extents, tokens, names, splits] = regexp(sys_out,pname,'ignorecase', 'match');
+    else
+        disp(sys_out);
+        error('Unable to access system processes');
+        
+    end
+    
+    
+    
+    if (numel(matches) == 0)
+        
+        varargout{1} = false;
+        varargout{2}=0;
+        varargout{3}='No Matching Process-IDs';
+    else
+        
+        for i=1:numel(matches)
+            match_pid(i) = regexp(splits(i+1), '\d+', 'match', 'once');
+            pid_nums{i}=str2double(match_pid{i});
+            varargout{1}=true;
+        end
+        varargout{2}=numel(matches);
+        varargout{3}=pid_nums;
+    end
+    
+end
+
+if isunix
+    [sys_status , sys_out] = system('ps -A -o cmd');
+    expr = ['\w*' pname '\w*'];
+    if (sys_status == 0)
+        matches = regexp(sys_out,expr,'ignorecase', 'match');
+    else
+        disp(sys_out);
+        error('Unable to access system processes');
+    end
+    
+    if (numel(matches) == 0)
+        varargout{1} = false;
+        varargout{2}=0;
+        varargout{3}='No Matching Process-IDs';
+    else
+        
+        pgrep_cmd = ['pgrep ' matches{1}];
+        [sys_status , sys_out] = system(pgrep_cmd);
+        pid_nums =regexp(sys_out,'\d+','ignorecase', 'match');
+        varargout{1}=true;
+        varargout{2}=numel(pid_nums);
+        varargout{3}=pid_nums;
+    end
+    
+end
+end
+
+%% continue script once process is done:
+function hold_on_to_your_horses(fn)
+flag = true;
+while flag 
+     flag = isprocess(fn); % isprocess is the function attached. Place it on the MATLAB path.
+     pause(1) % check every 1 second
+end
+end
 
 
 
